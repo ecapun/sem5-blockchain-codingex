@@ -1,0 +1,343 @@
+import { useEffect, useState } from "react";
+import { ethers } from "ethers";
+
+declare global {
+    interface Window {
+        ethereum?: any;
+    }
+}
+
+// Sepolia Lottery Contract-Adresse aus .env
+const LOTTERY_ADDRESS = import.meta.env.VITE_LOTTERY_ADDRESS as string;
+
+// ABI passend zu deinem Lottery.sol
+const LOTTERY_ABI = [
+    "function ticketPrice() view returns (uint256)",
+    "function owner() view returns (address)",
+    "function getPlayers() view returns (address[])",
+    "function enter() external payable",
+    "function pickWinner() external",
+];
+
+type LotteryInfo = {
+    ticketPriceWei: string;
+    ticketPriceEth: string;
+    owner: string;
+    players: string[];
+};
+
+function App() {
+    const [account, setAccount] = useState<string | null>(null);
+    const [networkName, setNetworkName] = useState<string>("");
+    const [isSepolia, setIsSepolia] = useState<boolean>(false);
+
+    const [lotteryInfo, setLotteryInfo] = useState<LotteryInfo | null>(null);
+
+    const [loading, setLoading] = useState(false);
+    const [status, setStatus] = useState<string | null>(null);
+    const [winnerFlash, setWinnerFlash] = useState(false);
+
+    // ----------------- Helpers -----------------
+
+    async function getProvider() {
+        if (!window.ethereum) {
+            throw new Error("MetaMask not found");
+        }
+        return new ethers.providers.Web3Provider(window.ethereum);
+    }
+
+    async function loadNetworkInfo(provider: ethers.providers.Web3Provider) {
+        const net = await provider.getNetwork();
+        const name = net.name === "homestead" ? "Mainnet" : net.name;
+        setNetworkName(name);
+
+        // Sepolia chainId = 11155111 (0xaa36a7)
+        setIsSepolia(net.chainId === 11155111n);
+    }
+
+    // ----------------- Init -----------------
+
+    useEffect(() => {
+        initOnLoad();
+    }, []);
+
+    async function initOnLoad() {
+        if (!window.ethereum) return;
+        const provider = await getProvider();
+        await loadNetworkInfo(provider);
+        const accounts = await provider.listAccounts();
+        if (accounts.length > 0) {
+            setAccount(accounts[0]);
+            await loadLotteryData(provider);
+        }
+    }
+
+    // ----------------- Wallet / Data -----------------
+
+    async function connectWallet() {
+        try {
+            const provider = await getProvider();
+            const accounts: string[] = await provider.send("eth_requestAccounts", []);
+            setAccount(accounts[0]);
+            await loadNetworkInfo(provider);
+            await loadLotteryData(provider);
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    async function loadLotteryData(provider?: ethers.providers.Web3Provider) {
+        try {
+            const prov = provider || (await getProvider());
+            const contract = new ethers.Contract(LOTTERY_ADDRESS, LOTTERY_ABI, prov);
+
+            const [priceBN, ownerAddr, players] = await Promise.all([
+                contract.ticketPrice(),
+                contract.owner(),
+                contract.getPlayers(),
+            ]);
+
+            const ticketPriceWei = priceBN.toString();
+            const ticketPriceEth = ethers.utils.formatEther(priceBN);
+
+            setLotteryInfo({
+                ticketPriceWei,
+                ticketPriceEth,
+                owner: ownerAddr,
+                players,
+            });
+            setStatus(null);
+        } catch (err) {
+            console.error(err);
+            setStatus(
+                "Fehler beim Laden der Lottery-Daten (Adresse & Netzwerk prüfen)."
+            );
+        }
+    }
+
+    // ----------------- Actions -----------------
+
+    async function joinLottery() {
+        if (!lotteryInfo) return;
+        try {
+            setLoading(true);
+            setStatus("Sende Transaktion…");
+
+            const provider = await getProvider();
+            const signer = provider.getSigner();
+            const contract = new ethers.Contract(LOTTERY_ADDRESS, LOTTERY_ABI, signer);
+
+            const tx = await contract.enter({ value: lotteryInfo.ticketPriceWei });
+            setStatus("Warte auf Bestätigung…");
+            await tx.wait();
+
+            setStatus("Du bist in der Lottery! 🎉");
+            await loadLotteryData(provider);
+        } catch (err: any) {
+            console.error(err);
+            setStatus(null);
+            alert(err?.reason || err?.message || "Fehler beim Beitritt");
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function pickWinner() {
+        if (!lotteryInfo) return;
+        try {
+            setLoading(true);
+            setStatus("Ziehe Gewinner…");
+
+            const provider = await getProvider();
+            const signer = provider.getSigner();
+            const contract = new ethers.Contract(LOTTERY_ADDRESS, LOTTERY_ABI, signer);
+
+            const tx = await contract.pickWinner();
+            await tx.wait();
+
+            setStatus("Gewinner gezogen & ausgezahlt 🎊");
+            setWinnerFlash(true);
+            setTimeout(() => setWinnerFlash(false), 2500);
+
+            await loadLotteryData(provider);
+        } catch (err: any) {
+            console.error(err);
+            setStatus(null);
+            alert(
+                err?.reason ||
+                err?.message ||
+                "Fehler beim Ziehen des Gewinners (Owner? Spieler vorhanden?)"
+            );
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    const isOwner =
+        account &&
+        lotteryInfo &&
+        account.toLowerCase() === lotteryInfo.owner.toLowerCase();
+
+    const accountIsPlayer =
+        !!account &&
+        !!lotteryInfo &&
+        lotteryInfo.players.some(
+            (p) => p.toLowerCase() === account.toLowerCase()
+        );
+
+    // ----------------- UI -----------------
+
+    return (
+        <div className="app-root">
+            <header className="app-header">
+                <div>
+                    <h1>🎟️ Sepolia Lottery</h1>
+                    <div className="contract-address">
+                        Contract: <code>{LOTTERY_ADDRESS}</code>
+                    </div>
+                </div>
+
+                <div className="wallet-box">
+                    <div className="network-tag">
+                        Network:{" "}
+                        <span className={isSepolia ? "network-ok" : "network-bad"}>
+              {networkName || "Unknown"}
+            </span>
+                    </div>
+                    {account ? (
+                        <>
+                            <div className="wallet-label">Wallet</div>
+                            <div className="wallet-address">
+                                {account.slice(0, 6)}…{account.slice(-4)}
+                            </div>
+                            {accountIsPlayer && (
+                                <div className="pill pill-small" style={{ marginTop: 4 }}>
+                                    You&apos;re in this round 🎉
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <button onClick={connectWallet} className="btn primary">
+                            Connect MetaMask
+                        </button>
+                    )}
+                </div>
+            </header>
+
+            {!isSepolia && (
+                <div className="warning-box">
+                    ⚠️ Bitte in MetaMask auf <b>Sepolia</b> wechseln, damit alles
+                    funktioniert.
+                </div>
+            )}
+
+            {!lotteryInfo ? (
+                <div className="card">
+                    <p>
+                        Noch keine Lottery-Daten geladen. Verbinde deine Wallet oder prüfe
+                        die Contract-Adresse in <code>.env</code>.
+                    </p>
+                </div>
+            ) : (
+                <>
+                    <main className="grid">
+                        {/* Lottery Info */}
+                        <section className="card">
+                            <h2>Lottery Info</h2>
+                            <p>
+                                <b>Ticketpreis:</b> {lotteryInfo.ticketPriceEth} ETH
+                                <br />
+                                <b>Owner:</b>{" "}
+                                <span className="mono">{lotteryInfo.owner}</span>
+                                <br />
+                                <b>Spieler:</b> {lotteryInfo.players.length}
+                            </p>
+
+                            <div className="button-row">
+                                <button
+                                    className={
+                                        "btn primary" +
+                                        (!accountIsPlayer && account && isSepolia
+                                            ? " pulse"
+                                            : "")
+                                    }
+                                    disabled={!account || loading || !isSepolia}
+                                    onClick={joinLottery}
+                                >
+                                    {accountIsPlayer
+                                        ? "You already joined"
+                                        : `Join Lottery (${lotteryInfo.ticketPriceEth} ETH)`}
+                                </button>
+
+                                <button
+                                    className="btn secondary"
+                                    disabled={!account || !isOwner || loading || !isSepolia}
+                                    onClick={pickWinner}
+                                >
+                                    Pick Winner (Owner)
+                                </button>
+                            </div>
+
+                            {status && <p className="status-text">{status}</p>}
+
+                            {account && !isOwner && (
+                                <p className="hint-text">
+                                    Hinweis: Nur der <b>Owner</b> kann „Pick Winner“ ausführen.
+                                </p>
+                            )}
+                        </section>
+
+                        {/* Players */}
+                        <section className="card">
+                            <h2>Players</h2>
+                            {lotteryInfo.players.length === 0 ? (
+                                <p>Noch keine Spieler – sei der Erste! 😄</p>
+                            ) : (
+                                <ul className="player-list">
+                                    {lotteryInfo.players.map((p, i) => {
+                                        const isThisAccount =
+                                            account &&
+                                            p.toLowerCase() === account.toLowerCase();
+                                        return (
+                                            <li
+                                                key={i}
+                                                className={
+                                                    "player-item" + (isThisAccount ? " player-me" : "")
+                                                }
+                                            >
+                        <span>
+                          #{i + 1} –{" "}
+                            <span className="mono">
+                            {p.slice(0, 6)}…{p.slice(-4)}
+                          </span>
+                        </span>
+                                                <div style={{ display: "flex", gap: 6 }}>
+                                                    {lotteryInfo.owner.toLowerCase() ===
+                                                        p.toLowerCase() && (
+                                                            <span className="pill">Owner</span>
+                                                        )}
+                                                    {isThisAccount && (
+                                                        <span className="pill pill-me">You</span>
+                                                    )}
+                                                </div>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            )}
+                        </section>
+                    </main>
+
+                    {/* Winner Flash Banner */}
+                    {winnerFlash && (
+                        <div className="winner-banner">
+                            🎉 Winner selected! Check your wallet! 🎉
+                        </div>
+                    )}
+                </>
+            )}
+        </div>
+    );
+}
+
+export default App;

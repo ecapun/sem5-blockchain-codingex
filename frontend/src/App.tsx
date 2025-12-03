@@ -7,10 +7,10 @@ declare global {
     }
 }
 
-// Sepolia Lottery Contract-Adresse aus .env
+
 const LOTTERY_ADDRESS = import.meta.env.VITE_LOTTERY_ADDRESS as string;
 
-// ABI passend zu deinem Lottery.sol
+
 const LOTTERY_ABI = [
     "function ticketPrice() view returns (uint256)",
     "function owner() view returns (address)",

@@ -1,5 +1,10 @@
 node_modules
-.env
+# Backend .env ignorieren
+/.env
+
+# Frontend .env zulassen
+!frontend/.env
+
 
 # Hardhat files
 /cache

@@ -52,7 +52,7 @@ function App() {
         setNetworkName(name);
 
         // Sepolia chainId = 11155111 (0xaa36a7)
-        setIsSepolia(net.chainId === 11155111n);
+        setIsSepolia(net.chainId === 11155111);
     }
 
     // ----------------- Init -----------------

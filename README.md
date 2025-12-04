@@ -74,7 +74,6 @@ Der Gewinner erhält den kompletten Pot.
 Gleichzeitig wird automatisch:
 
 * recordTicket() beim Ticketkauf aufgerufen
-* 
 * recordWin() beim Ziehen des Gewinners gespeichert
 
 Im Frontend sieht man danach die eigenen Statistiken.
@@ -120,8 +119,8 @@ https://sepolia.etherscan.io/address/0xe06685B6560E90722e54752cb29507186415C780#
 
 Unter getPlayerStats(address) kannst du prüfen:
 
-Anzahl der gekauften Tickets
-* 
+
+* Anzahl der gekauften Tickets
 * Anzahl der Gewinne
 
 Diese Werte werden vom Lottery-Contract automatisch aktualisiert.

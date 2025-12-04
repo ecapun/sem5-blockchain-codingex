@@ -7,9 +7,9 @@ declare global {
     }
 }
 
-
 const LOTTERY_ADDRESS = import.meta.env.VITE_LOTTERY_ADDRESS as string;
 
+const PLAYER_STATS_ADDRESS = "0xe06685B6560E90722e54752cb29507186415C780";
 
 const LOTTERY_ABI = [
     "function ticketPrice() view returns (uint256)",
@@ -19,11 +19,20 @@ const LOTTERY_ABI = [
     "function pickWinner() external",
 ];
 
+const PLAYER_STATS_ABI = [
+    "function getPlayerStats(address player) view returns (uint256 tickets, uint256 totalWins)",
+];
+
 type LotteryInfo = {
     ticketPriceWei: string;
     ticketPriceEth: string;
     owner: string;
     players: string[];
+};
+
+type PlayerStats = {
+    tickets: string;
+    wins: string;
 };
 
 function App() {
@@ -32,12 +41,12 @@ function App() {
     const [isSepolia, setIsSepolia] = useState<boolean>(false);
 
     const [lotteryInfo, setLotteryInfo] = useState<LotteryInfo | null>(null);
+    const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
 
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState<string | null>(null);
     const [winnerFlash, setWinnerFlash] = useState(false);
 
-    // ----------------- Helpers -----------------
 
     async function getProvider() {
         if (!window.ethereum) {
@@ -55,7 +64,6 @@ function App() {
         setIsSepolia(net.chainId === 11155111);
     }
 
-    // ----------------- Init -----------------
 
     useEffect(() => {
         initOnLoad();
@@ -69,18 +77,20 @@ function App() {
         if (accounts.length > 0) {
             setAccount(accounts[0]);
             await loadLotteryData(provider);
+            await loadPlayerStats(provider, accounts[0]);
         }
     }
 
-    // ----------------- Wallet / Data -----------------
 
     async function connectWallet() {
         try {
             const provider = await getProvider();
             const accounts: string[] = await provider.send("eth_requestAccounts", []);
-            setAccount(accounts[0]);
+            const acc = accounts[0];
+            setAccount(acc);
             await loadNetworkInfo(provider);
             await loadLotteryData(provider);
+            await loadPlayerStats(provider, acc);
         } catch (err) {
             console.error(err);
         }
@@ -115,7 +125,31 @@ function App() {
         }
     }
 
-    // ----------------- Actions -----------------
+    async function loadPlayerStats(
+        provider?: ethers.providers.Web3Provider,
+        addr?: string
+    ) {
+        try {
+            if (!addr) return;
+            const prov = provider || (await getProvider());
+            const contract = new ethers.Contract(
+                PLAYER_STATS_ADDRESS,
+                PLAYER_STATS_ABI,
+                prov
+            );
+
+            const [ticketsBN, winsBN] = await contract.getPlayerStats(addr);
+            setPlayerStats({
+                tickets: ticketsBN.toString(),
+                wins: winsBN.toString(),
+            });
+        } catch (err) {
+            console.error("Fehler beim Laden der Player-Stats:", err);
+            // bei Fehler Stats einfach null lassen
+            setPlayerStats(null);
+        }
+    }
+
 
     async function joinLottery() {
         if (!lotteryInfo) return;
@@ -133,6 +167,9 @@ function App() {
 
             setStatus("Du bist in der Lottery! 🎉");
             await loadLotteryData(provider);
+
+            const signerAddr = await signer.getAddress();
+            await loadPlayerStats(provider, signerAddr);
         } catch (err: any) {
             console.error(err);
             setStatus(null);
@@ -160,6 +197,9 @@ function App() {
             setTimeout(() => setWinnerFlash(false), 2500);
 
             await loadLotteryData(provider);
+
+            const signerAddr = await signer.getAddress();
+            await loadPlayerStats(provider, signerAddr);
         } catch (err: any) {
             console.error(err);
             setStatus(null);
@@ -185,7 +225,6 @@ function App() {
             (p) => p.toLowerCase() === account.toLowerCase()
         );
 
-    // ----------------- UI -----------------
 
     return (
         <div className="app-root">
@@ -241,7 +280,6 @@ function App() {
             ) : (
                 <>
                     <main className="grid">
-                        {/* Lottery Info */}
                         <section className="card">
                             <h2>Lottery Info</h2>
                             <p>
@@ -257,9 +295,7 @@ function App() {
                                 <button
                                     className={
                                         "btn primary" +
-                                        (!accountIsPlayer && account && isSepolia
-                                            ? " pulse"
-                                            : "")
+                                        (!accountIsPlayer && account && isSepolia ? " pulse" : "")
                                     }
                                     disabled={!account || loading || !isSepolia}
                                     onClick={joinLottery}
@@ -287,17 +323,15 @@ function App() {
                             )}
                         </section>
 
-                        {/* Players */}
                         <section className="card">
                             <h2>Players</h2>
                             {lotteryInfo.players.length === 0 ? (
-                                <p>Noch keine Spieler – sei der Erste! 😄</p>
+                                <p>Noch keine Spieler! Sei der Erste! 😄</p>
                             ) : (
                                 <ul className="player-list">
                                     {lotteryInfo.players.map((p, i) => {
                                         const isThisAccount =
-                                            account &&
-                                            p.toLowerCase() === account.toLowerCase();
+                                            account && p.toLowerCase() === account.toLowerCase();
                                         return (
                                             <li
                                                 key={i}
@@ -326,14 +360,53 @@ function App() {
                                 </ul>
                             )}
                         </section>
+
+                        <section className="card">
+                            <h2>Deine Lottery-Statistiken</h2>
+                            {!account ? (
+                                <p>Verbinde deine Wallet, um deine Statistiken zu sehen.</p>
+                            ) : !playerStats ? (
+                                <p>Noch keine Statistiken gefunden – spiele eine Runde! 🎮</p>
+                            ) : (
+                                <p>
+                                    <b>Tickets gekauft:</b> {playerStats.tickets}
+                                    <br />
+                                    <b>Gewinne:</b> {playerStats.wins}
+                                </p>
+                            )}
+                            <p className="hint-text">
+                                Kauf ein Ticket. Schadet nicht. Außer deinem Kontostand.
+                            </p>
+                        </section>
                     </main>
 
-                    {/* Winner Flash Banner */}
                     {winnerFlash && (
                         <div className="winner-banner">
                             🎉 Winner selected! Check your wallet! 🎉
                         </div>
                     )}
+
+                    <footer style={{ marginTop: "2rem" }}>
+                        <h3>Weitere Infos auf Etherscan</h3>
+                        <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
+                            <a
+                                href={`https://sepolia.etherscan.io/address/${LOTTERY_ADDRESS}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="btn secondary"
+                            >
+                                Lottery auf Etherscan
+                            </a>
+                            <a
+                                href={`https://sepolia.etherscan.io/address/${PLAYER_STATS_ADDRESS}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="btn secondary"
+                            >
+                                PlayerStats auf Etherscan
+                            </a>
+                        </div>
+                    </footer>
                 </>
             )}
         </div>

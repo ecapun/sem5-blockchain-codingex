@@ -1,4 +1,4 @@
-# sem5-blockchain-codingex
+sem5-blockchain-codingex
 
 **Interaktion mit dem Smart Contract**
 
@@ -9,79 +9,119 @@ Sobald alle Teilnehmer eingezahlt haben, kann der Contract-Owner die Ziehung sta
 Nachdem der Owner die Ziehung in MetaMask bestätigt, wählt der Smart Contract automatisch einen zufälligen Gewinner aus.
 Der Gewinner erhält den gesamten angesammelten Betrag direkt auf seine Wallet-Adresse überwiesen.
 
-Der Lottery-Smart-Contract wurde auf dem Sepolia Testnet deployed und kann auf zwei verschiedene Arten verwendet werden:
+Zusätzlich wird die Anzahl der gekauften Tickets und die Anzahl der Gewinne eines Spielers automatisch im separaten PlayerStats-Smart-Contract gespeichert.
+Damit lassen sich individuelle Statistiken im Frontend anzeigen.
 
-* **über das bereitgestellte Frontend (empfohlen)**
+Der Smart-Contract-Verbund besteht aus:
+
+* Lottery (Hauptcontract)
+* PlayerStats (Statistik-Contract)
+
+Beide Contracts wurden auf dem Sepolia-Testnet deployed und können auf zwei Arten verwendet werden:
+
+* über das bereitgestellte Frontend (empfohlen)
 * direkt über Etherscan (ohne lokale Installation)
 
+Contract-Adressen (Sepolia)
 
-**Contract-Adresse
-0xA2aF81b7Ed1E4A5eA2E2927F27db430Fda5A045E**
+Lottery (mit PlayerStats-Integration):
+0x84C94e71aF356e4E0FE5ED3f3B099401F405Da90
 
-**_1. Nutzung über das Frontend (lokale Ausführung)_**
+PlayerStats:
+0xe06685B6560E90722e54752cb29507186415C780
 
-Das Projekt enthält ein einfaches Frontend, mit dem man Tickets kaufen und den Gewinner ziehen kann.
-Voraussetzungen:
+**1. Nutzung über das Frontend (lokale Ausführung)**
+
+Das Projekt enthält ein einfaches Frontend, mit dem man:
+
+* Tickets kaufen
+* Gewinner ziehen (Owner)
+* eigene Statistiken ansehen (Tickets / Wins)
+
+Voraussetzungen
 
 * Node.js und npm müssen installiert sein
-* MetaMask Browser-Extension muss installiert sein
+* MetaMask Browser-Extension
+* MetaMask muss auf das Sepolia Test Network gestellt sein
 
-* MetaMask muss auf Sepolia Test Network gestellt sein
+Schritte
 
-Schritte:
-
-* In den frontend-Ordner wechseln:
+* In den Frontend-Ordner wechseln:
 * cd frontend
 * Abhängigkeiten installieren:
 * npm install
 * Frontend starten:
 * npm run dev
-* Die URL im Browser öffnen (http://localhost:5173)
+* Danach die URL öffnen:
+* http://localhost:5173
+* MetaMask verbinden
 
-Oben rechts MetaMask öffnen
-→ „Connect“ klicken
-→ Netzwerk auf Sepolia wechseln
-→ Wallet verbinden
+Oben rechts MetaMask öffnen:
 
-„Buy Ticket“ im Frontend klicken
-→ MetaMask öffnen mit Extension
-→ Transaktion bestätigen
-→ Ticket wird gekauft
+„Connect“ klicken →Netzwerk auf Sepolia wechseln →Wallet verbinden →Ticket kaufen
 
-Sobald alle Spieler ihre Tickets gekauft haben, kann der Owner auf
-„Pick Winner“ / „Draw“ klicken
-→ MetaMask öffnet sich
-→ Gewinner wird ausgezahlt
+„Buy Ticket“ klicken →
+MetaMask öffnet sich →
+Transaktion bestätigen →
+Ticket wird gekauft.
 
-Damit ist die komplette Lotterie über das Frontend verwendbar.
+**Gewinner ziehen (nur Owner)**
 
-**2. Nutzung über Etherscan (ohne Frontend)**
+„Pick Winner“ klicken →
+MetaMask öffnet sich →
+Der Gewinner erhält den kompletten Pot.
 
-Der Contract ist vollständig über Etherscan nutzbar.
-Damit kann jeder am Testnet teilnehmen, ohne das Projekt lokal zu starten.
+Gleichzeitig wird automatisch:
 
-Schritte:
+* recordTicket() beim Ticketkauf aufgerufen
+* 
+* recordWin() beim Ziehen des Gewinners gespeichert
 
-Auf Etherscan die Contract-Adresse öffnen:
-https://sepolia.etherscan.io/address/0xA2aF81b7Ed1E4A5eA2E2927F27db430Fda5A045E#writeContract
+Im Frontend sieht man danach die eigenen Statistiken.
+
+2. Nutzung über Etherscan (ohne Frontend)
+
+Der Contract kann auch direkt über Etherscan genutzt werden.
+Damit kann jeder am Testnet teilnehmen, ohne das Projekt lokal auszuführen.
+
+Lottery Contract öffnen
+
+https://sepolia.etherscan.io/address/0x84C94e71aF356e4E0FE5ED3f3B099401F405Da90#writeContract
+
+Schritte
 
 Zum Tab “Write Contract” wechseln
 
-Oben auf „Connect to Web3“ klicken
+„Connect to Web3“ klicken
 → MetaMask verbinden
-→ sicherstellen, dass das Netzwerk Sepolia aktiv ist
+→ sicherstellen, dass Sepolia aktiv ist
 
-Unter enter():
+Ticket kaufen (enter) → Unter enter():
 
-im Feld „Value“ 0.01 Ether eintragen
+* Value = 0.01 Ether eintragen
+* „Write“ klicken
+* Transaktion in MetaMask bestätigen
 
-„Write“ klicken
+Unter Read Contract → getPlayers() sieht man alle Teilnehmer.
 
-MetaMask öffnet sich, Transaktion bestätigen
+Gewinner ziehen (pickWinner)
 
-Unter „Read Contract“ → getPlayers() kann man sehen, wer teilnimmt
+Nur der Owner kann pickWinner() ausführen.
+Nach der Ziehung sieht man den Gewinner unter:
 
-Der Contract-Owner kann über pickWinner() den Gewinner ziehen
-→ Auszahlung erfolgt automatisch an die gezogene Adresse
+Internal Transactions (geht an die Gewinner-Adresse)
 
-Wer gewonnen hat sieht man unter "internal Transactions" nach der Ziehung. 
+Hinweis: PlayerStats Contract
+
+Wenn du deine eigenen Statistiken ansehen willst:
+
+PlayerStats Contract:
+https://sepolia.etherscan.io/address/0xe06685B6560E90722e54752cb29507186415C780#readContract
+
+Unter getPlayerStats(address) kannst du prüfen:
+
+Anzahl der gekauften Tickets
+* 
+* Anzahl der Gewinne
+
+Diese Werte werden vom Lottery-Contract automatisch aktualisiert.
